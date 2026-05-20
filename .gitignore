@@ -37,7 +37,7 @@ load-test*.log
 .env
 .env.*
 
-### Load test evidence (large binaries — keep *-summary.json only) ###
-evidence/*.pcapng
+### Load test evidence (logs only; PCAP via Git LFS — see evidence/README.md) ###
 evidence/*.etl
 evidence/*.log
+evidence/run-*.log

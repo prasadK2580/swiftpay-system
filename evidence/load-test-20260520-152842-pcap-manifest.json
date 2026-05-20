@@ -1,0 +1,21 @@
+{
+  "runId": 1779271126317,
+  "artifact": "load-test-20260520-152842.pcapng",
+  "description": "Docker tcpdump on swiftpay-gateway network namespace, filter tcp port 8080, snaplen 512",
+  "loadTest": {
+    "targetTps": 250,
+    "total": 1000000,
+    "achievedTps": 250,
+    "http201": 999029,
+    "errors": 971,
+    "elapsedMinutes": 66.67
+  },
+  "summaryJson": "load-test-20260520-152842-summary.json",
+  "capture": {
+    "tool": "tcpdump (nicolaka/netshoot sidecar)",
+    "filter": "tcp port 8080",
+    "snaplen": 512
+  },
+  "localPath": "evidence/load-test-20260520-152842.pcapng",
+  "git": "Tracked with Git LFS (file exceeds GitHub 100MB blob limit)"
+}

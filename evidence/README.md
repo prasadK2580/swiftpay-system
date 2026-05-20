@@ -25,4 +25,6 @@ cd d:\transaction-gateway-service
 
 See `docs/LOAD-TEST-EVIDENCE.md` for methodology and bottleneck analysis.
 
-**Git:** PCAP and `.log` files are not committed (size limits). Commit `*-summary.json` and submit PCAP separately (release asset, drive, etc.).
+**Git:** `*-summary.json` and `*-pcap-manifest.json` are in git. The `.pcapng` (~1 GB) is stored with **Git LFS** (`git lfs pull` after clone). Progress `.log` files stay local only.
+
+If LFS bandwidth/storage is unavailable, keep the PCAP locally at `evidence/load-test-YYYYMMDD-HHmmss.pcapng` or attach it to a [GitHub Release](https://github.com/prasadK2580/swiftpay-system/releases).
