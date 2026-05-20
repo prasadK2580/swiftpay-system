@@ -36,3 +36,8 @@ build/
 load-test*.log
 .env
 .env.*
+
+### Load test evidence (large binaries — keep *-summary.json only) ###
+evidence/*.pcapng
+evidence/*.etl
+evidence/*.log

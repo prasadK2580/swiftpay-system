@@ -19,7 +19,7 @@ function arg(name, fallback) {
 
 const TARGET_TPS = Number(arg('--tps', process.env.TPS ?? '250'));
 const TOTAL = Number(arg('--total', process.env.TOTAL ?? '1000000'));
-const BASE_URL = (arg('--url', process.env.BASE_URL ?? 'http://localhost:8080')).replace(/\/$/, '');
+const BASE_URL = (arg('--url', process.env.BASE_URL ?? 'http://127.0.0.1:8080')).replace(/\/$/, '');
 const SENDER_ID = Number(arg('--sender', '1001'));
 const RECEIVER_ID = Number(arg('--receiver', '2002'));
 const AMOUNT = Number(arg('--amount', '1'));
