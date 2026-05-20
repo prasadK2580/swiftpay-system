@@ -1,15 +1,16 @@
+# Docker Compose / K8s internal DNS (not localhost).
 spring:
   datasource:
-    url: jdbc:postgresql://postgres:5432/swiftpay
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://postgres:5432/swiftpay}
   data:
     redis:
-      host: redis
+      host: ${SPRING_DATA_REDIS_HOST:redis}
   kafka:
-    bootstrap-servers: kafka:29092
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:kafka:29092}
   jpa:
     show-sql: false
 
 app:
   ledger:
     http:
-      base-url: http://ledger:8081
+      base-url: ${APP_LEDGER_HTTP_BASE_URL:http://ledger:8081}

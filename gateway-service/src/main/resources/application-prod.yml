@@ -1,0 +1,16 @@
+# Production / K8s: use with SPRING_PROFILES_ACTIVE=docker,prod (or prod + env vars).
+# Set SPRING_DATASOURCE_*, SPRING_KAFKA_BOOTSTRAP_SERVERS, SPRING_DATA_REDIS_HOST,
+# APP_LEDGER_HTTP_BASE_URL — no localhost defaults in this profile.
+
+spring:
+  jpa:
+    show-sql: false
+
+management:
+  endpoint:
+    health:
+      show-details: when-authorized
+
+app:
+  openapi:
+    server-url: ${APP_OPENAPI_SERVER_URL:/}

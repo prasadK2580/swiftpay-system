@@ -164,7 +164,7 @@ In production, databases would often be split; shared DB is acceptable for demo 
     - Updates Redis status/balance caches.
 
 11. **Verify outcome**  
-    - `GET /v1/history/{userId}?limit=10` on ledger (:8081) or check DB `transactions.status`.
+    - `GET /v1/payments/{transactionId}` on gateway (:8080) until status is **COMPLETED** or **FAILED**.
 
 ### 4.2 Insufficient funds — two layers
 
@@ -191,6 +191,7 @@ In production, databases would often be split; shared DB is acceptable for demo 
 | Method | Path | Description |
 |--------|------|-------------|
 | POST | `/v1/payments` | Create payment. **Required header:** `Idempotency-Key` |
+| GET | `/v1/payments/{transactionId}` | Poll payment status (PENDING → COMPLETED/FAILED) |
 | GET | `/health` | Health (DB, Redis, Kafka) |
 | GET | `/swagger-ui.html` | OpenAPI UI |
 
@@ -407,7 +408,8 @@ GitHub Actions (`.github/workflows/ci.yml`):
 | Ledger integration | `LedgerBalanceApiIntegrationTest` | Balance API 200/404 |
 | Gateway integration | `PaymentApiIntegrationTest` | POST returns 201 PENDING |
 | Gateway integration | `InsufficientFundsIntegrationTest` | POST returns 422 |
-| Gateway E2E | `PaymentApiIntegrationTest`, `UnknownReceiverIntegrationTest` | POST payment + validation |
+| Gateway E2E | `PaymentStatusIntegrationTest` | POST + GET `/v1/payments/{id}` until COMPLETED |
+| Gateway integration | `PaymentApiIntegrationTest`, `UnknownReceiverIntegrationTest` | POST payment + validation |
 
 Run all tests:
 
@@ -480,7 +482,8 @@ Store under `evidence/`:
 | Consume PaymentInitiated | Done | `PaymentInitiatedListener` |
 | Atomic debit/credit | Done | `LedgerSettlementService` |
 | PaymentCompleted / Failed events | Done | `KafkaSettlementEventPublisher` |
-| GET transaction history | Done | `LedgerHistoryController` with `?limit=` |
+| GET payment status | Done | `GET /v1/payments/{transactionId}` — `PaymentQueryService` |
+| GET transaction history | Done | `LedgerHistoryController` with `?limit=` (reporting) |
 
 ### Mandatory non-functional
 
@@ -509,9 +512,9 @@ Store under `evidence/`:
 1. Run `docker compose up --build`.
 2. Open http://localhost:8080/swagger-ui.html
 3. POST payment: sender `1001`, receiver `2002`, amount `1`, header `Idempotency-Key: demo-001`.
-4. Copy `transactionId`; GET `/v1/payments/{id}` until **COMPLETED**.
-5. Open http://localhost:8081/swagger-ui.html → GET `/v1/history/1001?limit=10`.
-6. POST payment with amount `999999999` → expect **422** insufficient funds.
+4. Copy `transactionId`; GET `/v1/payments/{transactionId}` until **COMPLETED** (only status endpoint clients need).
+5. POST payment with amount `999999999` → expect **422** insufficient funds.
+6. (Optional) Ledger history: GET `/v1/history/1001?limit=10` on :8081 for reporting.
 7. (Optional) Show logs: `[PAYMENT_FLOW]`, `[LEDGER_FLOW]`, Kafka emit/receive lines.
 
 ---

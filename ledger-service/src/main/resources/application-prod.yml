@@ -1,0 +1,17 @@
+# Production / K8s: use with SPRING_PROFILES_ACTIVE=docker,prod (or prod + env vars).
+
+spring:
+  jpa:
+    show-sql: false
+  sql:
+    init:
+      mode: never
+
+management:
+  endpoint:
+    health:
+      show-details: when-authorized
+
+app:
+  openapi:
+    server-url: ${APP_OPENAPI_SERVER_URL:/}

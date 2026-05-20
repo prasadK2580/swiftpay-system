@@ -49,6 +49,7 @@ docker compose up --build
 | http://localhost:8080/health | Gateway health |
 | http://localhost:8081/health | Ledger health |
 | http://localhost:8080/v1/payments | POST payment (`Idempotency-Key`) |
+| http://localhost:8080/v1/payments/{transactionId} | GET payment status (poll until COMPLETED) |
 | http://localhost:8081/v1/accounts/1001/balance?currency=INR | Authoritative balance |
 | http://localhost:8081/v1/history/1001?limit=50 | Transaction history |
 
@@ -60,7 +61,7 @@ curl -X POST http://localhost:8080/v1/payments \
   -H "Idempotency-Key: demo-key-001" \
   -d '{"senderId":1001,"receiverId":2002,"amount":1,"currency":"INR"}'
 
-curl "http://localhost:8081/v1/history/1001?limit=5"
+curl "http://localhost:8080/v1/payments/{transactionId}"
 ```
 
 ## Local development
@@ -90,6 +91,21 @@ Or manually (must build `swiftpay-shared` first):
 ```
 
 Or IDE: `LedgerApplication` (8081), then `GatewayApplication` (8080). Requires `docker compose up -d postgres redis kafka`.
+
+## Production configuration (no hardcoded localhost)
+
+| Environment | Profile | Infra hosts |
+|-------------|---------|-------------|
+| Local IDE | *(default)* | `localhost` (Postgres, Redis, Kafka, ledger `:8081`) |
+| Docker / K8s | `docker,prod` | `postgres`, `redis`, `kafka:29092`, `ledger` / `swiftpay-ledger` |
+
+Override via environment variables (see [`.env.example`](.env.example)):
+
+- `SPRING_DATASOURCE_URL`, `SPRING_KAFKA_BOOTSTRAP_SERVERS`, `SPRING_DATA_REDIS_HOST`
+- `APP_LEDGER_HTTP_BASE_URL` — gateway → ledger (required in code if unset)
+- `APP_OPENAPI_SERVER_URL` — optional public URL for Swagger (default `/` in prod profile)
+
+`docker compose up` and `k8s/app.yaml` already set these for container networking.
 
 ## Kubernetes (Minikube)
 

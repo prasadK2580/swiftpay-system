@@ -10,7 +10,8 @@
 | Save PENDING + PaymentInitiated | `PaymentPersistenceService` + `KafkaPaymentEventPublisher` | Logs `[KAFKA_SIGNAL_SENT]` |
 | Consume PaymentInitiated | `PaymentInitiatedListener` | Integration tests + Kafka logs |
 | Atomic debit/credit | `LedgerSettlementService` + ordered locks | CODEBASE-GUIDE |
-| PaymentCompleted / Failed | `KafkaSettlementEventPublisher` | E2E test → COMPLETED |
+| PaymentCompleted / Failed | `KafkaSettlementEventPublisher` | `PaymentStatusIntegrationTest` → GET until COMPLETED |
+| GET payment status | `GET /v1/payments/{transactionId}` | `PaymentQueryService`, poll after POST |
 | GET transaction history | `GET /v1/history/{userId}?limit=` | Paginated (max 200) |
 
 ## Mandatory non-functional
@@ -38,5 +39,5 @@
 
 1. `docker compose up --build`
 2. Open Swagger → POST payment `1001` → `2002`, amount `1`
-3. GET `http://localhost:8081/v1/history/1001?limit=10` — confirm latest payment `COMPLETED`
+3. GET `http://localhost:8080/v1/payments/{transactionId}` — poll until `COMPLETED`
 4. POST with huge amount → `422` insufficient funds

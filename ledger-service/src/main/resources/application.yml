@@ -6,9 +6,9 @@ spring:
     name: ledger-service
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/swiftpay
-    username: postgres
-    password: postgres
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/swiftpay}
+    username: ${SPRING_DATASOURCE_USERNAME:postgres}
+    password: ${SPRING_DATASOURCE_PASSWORD:postgres}
     driver-class-name: org.postgresql.Driver
 
   jpa:
@@ -24,7 +24,7 @@ spring:
       data-locations: classpath:data.sql
 
   kafka:
-    bootstrap-servers: localhost:9092
+    bootstrap-servers: ${SPRING_KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
     admin:
       auto-create: true
     producer:
@@ -46,8 +46,8 @@ spring:
 
   data:
     redis:
-      host: localhost
-      port: 6379
+      host: ${SPRING_DATA_REDIS_HOST:localhost}
+      port: ${SPRING_DATA_REDIS_PORT:6379}
 
 springdoc:
   api-docs:
@@ -56,6 +56,8 @@ springdoc:
     path: /swagger-ui.html
 
 app:
+  openapi:
+    server-url: ${APP_OPENAPI_SERVER_URL:}
   kafka:
     enabled: true
     topics:

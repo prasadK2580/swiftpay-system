@@ -69,20 +69,18 @@
 			<artifactId>awaitility</artifactId>
 			<scope>test</scope>
 		</dependency>
+		<!-- E2E tests start LedgerApplication in-process -->
+		<dependency>
+			<groupId>com.swiftpay</groupId>
+			<artifactId>ledger-service</artifactId>
+			<version>${project.version}</version>
+			<scope>test</scope>
+		</dependency>
 	</dependencies>
 
 	<profiles>
-		<!-- E2E tests embed LedgerApplication; not needed for spring-boot:run -->
 		<profile>
 			<id>integration-tests</id>
-			<dependencies>
-				<dependency>
-					<groupId>com.swiftpay</groupId>
-					<artifactId>ledger-service</artifactId>
-					<version>${project.version}</version>
-					<scope>test</scope>
-				</dependency>
-			</dependencies>
 		</profile>
 	</profiles>
 

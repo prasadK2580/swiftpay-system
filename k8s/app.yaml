@@ -21,7 +21,13 @@ spec:
             - containerPort: 8081
           env:
             - name: SPRING_PROFILES_ACTIVE
-              value: docker
+              value: docker,prod
+            - name: SPRING_DATASOURCE_URL
+              value: jdbc:postgresql://postgres:5432/swiftpay
+            - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
+              value: kafka:29092
+            - name: SPRING_DATA_REDIS_HOST
+              value: redis
             - name: JAVA_TOOL_OPTIONS
               value: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
           readinessProbe:
@@ -73,7 +79,13 @@ spec:
             - containerPort: 8080
           env:
             - name: SPRING_PROFILES_ACTIVE
-              value: docker
+              value: docker,prod
+            - name: SPRING_DATASOURCE_URL
+              value: jdbc:postgresql://postgres:5432/swiftpay
+            - name: SPRING_KAFKA_BOOTSTRAP_SERVERS
+              value: kafka:29092
+            - name: SPRING_DATA_REDIS_HOST
+              value: redis
             - name: APP_LEDGER_HTTP_BASE_URL
               value: http://swiftpay-ledger:8081
             - name: JAVA_TOOL_OPTIONS

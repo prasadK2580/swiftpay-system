@@ -58,10 +58,12 @@ public class HttpLedgerBalanceReader implements LedgerBalanceReader {
     }
 
     private String resolveBaseUrl() {
-        if (StringUtils.hasText(properties.getBaseUrl())) {
-            return trimTrailingSlash(properties.getBaseUrl());
+        if (!StringUtils.hasText(properties.getBaseUrl())) {
+            throw new IllegalStateException(
+                    "Ledger base URL is not configured. Set app.ledger.http.base-url or "
+                            + "APP_LEDGER_HTTP_BASE_URL (e.g. http://ledger:8081 in Docker/K8s).");
         }
-        return "http://localhost:8081";
+        return trimTrailingSlash(properties.getBaseUrl());
     }
 
     private static String trimTrailingSlash(String baseUrl) {

@@ -199,7 +199,8 @@ flowchart LR
 |--------|------|---------|---------|
 | POST | `/v1/payments` | A | Create payment |
 | GET | `/v1/accounts/{userId}/balance?currency=` | B | Authoritative balance (A calls via HTTP) |
-| GET | `/v1/history/{userId}?limit=` | B (ledger :8081) | Transaction history |
+| GET | `/v1/payments/{transactionId}` | A (gateway :8080) | Poll payment status |
+| GET | `/v1/history/{userId}?limit=` | B (ledger :8081) | Transaction history (reporting) |
 | GET | `/health`, `/health/ready`, `/health/live` | — | DB + Redis + Kafka health |
 | GET | `/swagger-ui.html` | — | OpenAPI / Swagger UI |
 | GET | `/actuator/health` | — | Actuator health (same components) |

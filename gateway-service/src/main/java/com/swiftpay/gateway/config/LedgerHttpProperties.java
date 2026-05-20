@@ -7,7 +7,8 @@ import java.time.Duration;
 @ConfigurationProperties(prefix = "app.ledger.http")
 public class LedgerHttpProperties {
 
-    private String baseUrl = "http://localhost:8081";
+    /** Set via application.yml or APP_LEDGER_HTTP_BASE_URL (required at runtime). */
+    private String baseUrl;
 
     private Duration connectTimeout = Duration.ofSeconds(2);
 
