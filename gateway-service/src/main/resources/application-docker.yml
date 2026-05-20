@@ -1,0 +1,15 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://postgres:5432/swiftpay
+  data:
+    redis:
+      host: redis
+  kafka:
+    bootstrap-servers: kafka:29092
+  jpa:
+    show-sql: false
+
+app:
+  ledger:
+    http:
+      base-url: http://ledger:8081

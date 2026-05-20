@@ -1,0 +1,11 @@
+spring:
+  kafka:
+    consumer:
+      auto-offset-reset: latest
+  jpa:
+    show-sql: false
+
+app:
+  ledger:
+    consumer:
+      group-id: swiftpay-it-ledger

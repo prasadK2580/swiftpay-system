@@ -1,0 +1,106 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: swiftpay-ledger
+  namespace: swiftpay
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: swiftpay-ledger
+  template:
+    metadata:
+      labels:
+        app: swiftpay-ledger
+    spec:
+      containers:
+        - name: ledger
+          image: swiftpay-ledger:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8081
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: docker
+            - name: JAVA_TOOL_OPTIONS
+              value: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8081
+            initialDelaySeconds: 60
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8081
+            initialDelaySeconds: 90
+            periodSeconds: 15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: swiftpay-ledger
+  namespace: swiftpay
+spec:
+  type: ClusterIP
+  selector:
+    app: swiftpay-ledger
+  ports:
+    - port: 8081
+      targetPort: 8081
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: swiftpay-gateway
+  namespace: swiftpay
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: swiftpay-gateway
+  template:
+    metadata:
+      labels:
+        app: swiftpay-gateway
+    spec:
+      containers:
+        - name: gateway
+          image: swiftpay-gateway:local
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8080
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: docker
+            - name: APP_LEDGER_HTTP_BASE_URL
+              value: http://swiftpay-ledger:8081
+            - name: JAVA_TOOL_OPTIONS
+              value: "-XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0"
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: 8080
+            initialDelaySeconds: 90
+            periodSeconds: 15
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: swiftpay-gateway
+  namespace: swiftpay
+spec:
+  type: NodePort
+  selector:
+    app: swiftpay-gateway
+  ports:
+    - port: 8080
+      targetPort: 8080
+      nodePort: 30080

@@ -1,0 +1,18 @@
+# Isolated Kafka consumers: skip historical backlog from load tests; only process new events.
+spring:
+  kafka:
+    consumer:
+      auto-offset-reset: latest
+
+  jpa:
+    show-sql: false
+
+app:
+  gateway:
+    ledger-balance:
+      source: http
+    consumer:
+      group-id: swiftpay-it-gateway
+  ledger:
+    consumer:
+      group-id: swiftpay-it-ledger

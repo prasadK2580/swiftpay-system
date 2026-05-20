@@ -1,0 +1,36 @@
+# Activate for load tests: SPRING_PROFILES_ACTIVE=docker,performance
+spring:
+  jpa:
+    show-sql: false
+  datasource:
+    hikari:
+      maximum-pool-size: 64
+      minimum-idle: 16
+      connection-timeout: 5000
+  kafka:
+    listener:
+      concurrency: 4
+    producer:
+      properties:
+        linger.ms: 5
+        batch.size: 32768
+
+server:
+  tomcat:
+    threads:
+      max: 400
+      min-spare: 50
+    accept-count: 500
+    max-connections: 10000
+
+logging:
+  level:
+    com.swiftpay: INFO
+    org.hibernate.SQL: WARN
+    org.springframework.kafka: WARN
+
+app:
+  ledger:
+    http:
+      connect-timeout: 1s
+      read-timeout: 2s
