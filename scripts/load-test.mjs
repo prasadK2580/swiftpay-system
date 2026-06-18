@@ -10,6 +10,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const args = process.argv.slice(2);
 function arg(name, fallback) {
@@ -17,13 +18,33 @@ function arg(name, fallback) {
   return i >= 0 && args[i + 1] ? args[i + 1] : fallback;
 }
 
+function loadAccountConfig() {
+  const configPath =
+    process.env.SWIFTPAY_LOAD_TEST_ACCOUNTS_CONFIG ??
+    path.join(path.dirname(fileURLToPath(import.meta.url)), 'load-test-accounts.config.json');
+  try {
+    return JSON.parse(fs.readFileSync(configPath, 'utf8'));
+  } catch {
+    return {};
+  }
+}
+
+const accountCfg = loadAccountConfig();
+
 const TARGET_TPS = Number(arg('--tps', process.env.TPS ?? '250'));
 const TOTAL = Number(arg('--total', process.env.TOTAL ?? '1000000'));
 const BASE_URL = (arg('--url', process.env.BASE_URL ?? 'http://127.0.0.1:8080')).replace(/\/$/, '');
-const SENDER_ID = Number(arg('--sender', '1001'));
-const RECEIVER_ID = Number(arg('--receiver', '2002'));
+const SENDER_ID = Number(
+  arg('--sender', process.env.SWIFTPAY_LOAD_TEST_SENDER_ID ?? accountCfg.loadTestSenderId ?? '1001'),
+);
+const RECEIVER_ID = Number(
+  arg('--receiver', process.env.SWIFTPAY_LOAD_TEST_RECEIVER_ID ?? accountCfg.loadTestReceiverId ?? '2002'),
+);
+const RANDOM_AMOUNT = args.includes('--random-amount');
 const AMOUNT = Number(arg('--amount', '1'));
-const CURRENCY = arg('--currency', 'INR');
+const AMOUNT_MIN = Number(arg('--amount-min', '1'));
+const AMOUNT_MAX = Number(arg('--amount-max', '10'));
+const CURRENCY = arg('--currency', process.env.SWIFTPAY_LOAD_TEST_CURRENCY ?? accountCfg.currency ?? 'INR');
 const MAX_IN_FLIGHT = Number(arg('--max-in-flight', '2000'));
 const SUMMARY_PATH = arg('--summary', process.env.SUMMARY_PATH ?? '');
 

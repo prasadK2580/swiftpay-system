@@ -1,0 +1,30 @@
+{
+  "runId": 1779654195880,
+  "targetTps": 250,
+  "total": 1000000,
+  "completed": 1000000,
+  "sent": 1000000,
+  "errors": 1498,
+  "achievedTps": 37.82,
+  "elapsedSec": 26437.79,
+  "elapsedMinutes": 440.63,
+  "byStatus": {
+    "201": 998459,
+    "404": 4,
+    "500": 39
+  },
+  "latencyMs": {
+    "p50": 2038.2554999999702,
+    "p95": 2481.0868000015616,
+    "p99": 2663.4516999982297
+  },
+  "config": {
+    "baseUrl": "http://127.0.0.1:8080",
+    "senderId": 1001,
+    "receiverId": 2002,
+    "amount": 1,
+    "currency": "INR",
+    "maxInFlight": 2000
+  },
+  "finishedAt": "2026-05-25T03:43:53.742Z"
+}

@@ -148,8 +148,8 @@ In production, databases would often be split; shared DB is acceptable for demo 
    - **201 Created** with `transactionId` (server-generated UUID) and `status: PENDING`.
 
 8. **Ledger — consume Kafka**  
-   - `PaymentInitiatedListener` receives event.  
-   - `LedgerSettlementService` runs in one `@Transactional` (isolation REPEATABLE_READ).
+   - `PaymentInitiatedKafkaListener` receives event.  
+   - `SettlementService` delegates to `PaymentSettlementProcessor` in one `@Transactional` (isolation REPEATABLE_READ).
 
 9. **Ledger — settlement**  
    - Lock transaction row `FOR UPDATE`.  
@@ -159,7 +159,7 @@ In production, databases would often be split; shared DB is acceptable for demo 
    - If OK → debit sender, credit receiver, set transaction **COMPLETED**, emit `payment.completed`.
 
 10. **Gateway — feedback**  
-    - `PaymentSettlementFeedbackListener` consumes completed/failed.  
+    - `PaymentResultKafkaListener` consumes completed/failed.  
     - Updates `transactions.status` if still PENDING.  
     - Updates Redis status/balance caches.
 
@@ -330,36 +330,53 @@ transaction-gateway-service/
 
 ### 10.2 Layered architecture (per service)
 
+**Gateway (Service A)** — concrete classes by package; open the class to see Redis/Kafka/HTTP code:
+
+| Package | Responsibility | Key classes |
+|---------|----------------|-------------|
+| `controller` | REST + DTOs | `PaymentController` |
+| `service` | Orchestration | `PaymentService`, `PendingPaymentService`, `PaymentIdempotencyService` |
+| `service.validation` | Rules + balance check | `PaymentRequestValidator` |
+| `repository` | PostgreSQL | `PaymentRepository`, `TransactionJpaRepository` |
+| `cache` | Redis | `PaymentIdempotencyCache`, `PaymentBalanceCache`, `DuplicatePaymentChecker`, `PaymentStatusCache` |
+| `client` | HTTP to ledger | `LedgerBalanceClient` |
+| `event` | Kafka publish | `PaymentEventProducer` |
+| `infrastructure.kafka` | Kafka consume | `PaymentResultKafkaListener` |
+| `config` | Spring `@Configuration` | Kafka, Redis, HTTP |
+
+**Ledger (Service B)** — still uses port + infrastructure adapters:
+
 | Layer | Package | Responsibility |
 |-------|---------|----------------|
-| API | `*.api` | REST controllers, DTOs |
-| Application | `*.application` | Use cases, orchestration |
-| Domain | `*.domain` | JPA entities |
-| Port | `*.port` | Interfaces (DIP) |
-| Infrastructure | `*.infrastructure` | Redis, Kafka, HTTP, JPA adapters |
-| Config | `*.config` | Spring `@Configuration` |
+| API | `controller` | REST controllers, DTOs |
+| Application | `service` | Settlement, balance/history |
+| Domain | `entity`, `model` | JPA entities, settlement models |
+| Port | `port` | Interfaces for adapters |
+| Infrastructure | `infrastructure` | Redis, Kafka, JPA adapters |
+| Config | `config` | Spring `@Configuration` |
 
-### 10.3 SOLID highlights
+### 10.3 Design highlights
 
-- **Single responsibility:** Kafka listeners delegate to handlers; validators separate from persistence.
-- **Dependency inversion:** Application code depends on `BalanceStore`, `IdempotencyGuard`, `SettlementAccountStore` ports, not Redis/JPA directly.
-- **Interface segregation:** Small ports instead of exposing full repositories to use cases.
+- **Single responsibility:** Kafka listeners delegate to services; validation separate from persistence.
+- **Gateway readability:** One `@Component` / `@Repository` per concern (`cache/`, `client/`, `event/`).
+- **Async settlement:** Gateway saves PENDING, publishes Kafka; ledger settles; gateway updates status on feedback.
 
 ### 10.4 Key classes (quick index)
 
 | Class | Module | Role |
 |-------|--------|------|
 | `PaymentController` | gateway | REST entry for payments |
-| `PaymentInitiationService` | gateway | Orchestrates create payment |
-| `HttpLedgerBalanceReader` | gateway | HTTP client to ledger balance API |
-| `RedisIdempotencyGuard` | gateway | 24h idempotency |
-| `KafkaPaymentEventPublisher` | gateway | Publish initiated |
-| `PaymentSettlementFeedbackListener` | gateway | Consume completed/failed |
+| `PaymentService` | gateway | Create payment + get status |
+| `PendingPaymentService` | gateway | Save PENDING, afterCommit → Redis + Kafka |
+| `LedgerBalanceClient` | gateway | HTTP client to ledger balance API |
+| `PaymentIdempotencyCache` | gateway | 24h idempotency (Redis) |
+| `PaymentEventProducer` | gateway | Publish `payment.initiated` |
+| `PaymentResultKafkaListener` | gateway | Consume completed/failed |
 | `LedgerBalanceController` | ledger | Balance HTTP API |
 | `LedgerHistoryController` | ledger | History HTTP API |
-| `PaymentInitiatedListener` | ledger | Consume initiated |
-| `LedgerSettlementService` | ledger | Atomic settlement |
-| `KafkaSettlementEventPublisher` | ledger | Publish completed/failed |
+| `PaymentInitiatedKafkaListener` | ledger | Consume initiated |
+| `PaymentSettlementProcessor` | ledger | Atomic settlement |
+| `SettlementEventProducer` | ledger | Publish completed/failed |
 | `GlobalExceptionHandler` | shared | Uniform JSON errors |
 
 ---
@@ -404,7 +421,7 @@ GitHub Actions (`.github/workflows/ci.yml`):
 
 | Test type | Location | What it proves |
 |-----------|----------|----------------|
-| Unit | `PaymentBusinessRulesValidatorTest` | Validation rules |
+| Unit | `PaymentRequestValidatorTest` | Validation rules |
 | Ledger integration | `LedgerBalanceApiIntegrationTest` | Balance API 200/404 |
 | Gateway integration | `PaymentApiIntegrationTest` | POST returns 201 PENDING |
 | Gateway integration | `InsufficientFundsIntegrationTest` | POST returns 422 |
@@ -476,13 +493,13 @@ Store under `evidence/`:
 | Requirement | Status | Implementation |
 |-------------|--------|----------------|
 | POST /v1/payments | Done | `PaymentController` |
-| 24h idempotency (Redis) | Done | `RedisIdempotencyGuard`, `RedisTransactionDeduplicationGuard` |
-| Balance validation | Done | HTTP balance + Redis + `SufficientBalanceValidator` |
-| Save PENDING + publish initiated | Done | `PaymentPersistenceService`, `KafkaPaymentEventPublisher` |
-| Consume PaymentInitiated | Done | `PaymentInitiatedListener` |
-| Atomic debit/credit | Done | `LedgerSettlementService` |
-| PaymentCompleted / Failed events | Done | `KafkaSettlementEventPublisher` |
-| GET payment status | Done | `GET /v1/payments/{transactionId}` — `PaymentQueryService` |
+| 24h idempotency (Redis) | Done | `PaymentIdempotencyCache`, `DuplicatePaymentChecker` |
+| Balance validation | Done | HTTP balance + Redis + `PaymentRequestValidator` |
+| Save PENDING + publish initiated | Done | `PendingPaymentService`, `PaymentEventProducer` |
+| Consume PaymentInitiated | Done | `PaymentInitiatedKafkaListener` |
+| Atomic debit/credit | Done | `PaymentSettlementProcessor` |
+| PaymentCompleted / Failed events | Done | `SettlementEventProducer` |
+| GET payment status | Done | `GET /v1/payments/{transactionId}` — `PaymentService` |
 | GET transaction history | Done | `LedgerHistoryController` with `?limit=` (reporting) |
 
 ### Mandatory non-functional
@@ -492,7 +509,7 @@ Store under `evidence/`:
 | Swagger / OpenAPI | Done | springdoc on both services |
 | HTTP errors with body | Done | `GlobalExceptionHandler` |
 | Kafka consumer retry | Done | `KafkaConsumerRetryConfig` |
-| /health | Done | `HealthApiController` + actuator |
+| /health | Done | Spring Actuator `/health` |
 | Dockerfile | Done | Per-service Dockerfiles |
 | docker-compose | Done | Full stack |
 | Kubernetes | Done | `k8s/` |

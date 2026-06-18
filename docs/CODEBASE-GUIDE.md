@@ -23,62 +23,57 @@ com/swiftpay/
 │   └── domain/enums/                 ← TransactionStatus (PENDING, COMPLETED, FAILED)
 │
 ├── gateway/                          ← SERVICE A — Transaction Gateway
-│   ├── controller/                   ← REST controllers + dto/
-│   ├── service/                      ← Payment orchestration, persistence, status
-│   ├── application/                  ← Validators, mappers, idempotency outcomes
-│   │   ├── validation/
-│   │   ├── idempotency/
-│   │   └── mapper/
+│   ├── controller/                   ← REST + dto/
+│   ├── service/                      ← PaymentService, PendingPaymentService, idempotency
+│   │   └── validation/               ← PaymentRequestValidator
+│   ├── application/mapper/           ← DTO ↔ entity/event mappers
 │   ├── entity/                       ← JPA entities
-│   ├── repo/                         ← Spring Data repositories
-│   ├── model/                        ← PaymentCommand (app input)
-│   ├── port/                         ← Interfaces (contracts for adapters)
-│   └── infrastructure/               ← Redis, Kafka, HTTP clients, JPA adapters
-│       ├── redis/
-│       ├── kafka/                    ← Gateway Kafka producer + feedback consumer
-│       └── persistence/              ← JPA + account balance read for cache refresh
+│   ├── repository/                   ← PaymentRepository (Postgres), TransactionJpaRepository
+│   ├── cache/                        ← Redis: idempotency, balance, dedup, status
+│   ├── client/                       ← LedgerBalanceClient (HTTP to ledger)
+│   ├── event/                        ← PaymentEventProducer (Kafka publish)
+│   ├── model/                        ← PaymentCommand, idempotency helpers
+│   ├── config/                       ← Kafka, Redis, HTTP client config
+│   └── infrastructure/kafka/         ← PaymentResultKafkaListener (settlement feedback)
 │
 ├── ledger/                           ← SERVICE B — Ledger
 │   ├── controller/                   ← Balance + history REST + dto/
 │   ├── service/                      ← Settlement, balance/history queries
 │   ├── model/                        ← SettlementResult, SettlementOutcome
 │   ├── entity/                       ← JPA entities
-│   ├── repo/                         ← Spring Data repositories
+│   ├── repository/                   ← Domain repos + Spring Data (*JpaRepository)
 │   ├── port/
 │   └── infrastructure/kafka/         ← Consume PaymentInitiated, emit Completed/Failed
 │
-├── gateway/config/                   ← gateway-service only (Kafka producer, Redis, HTTP client)
+├── gateway/config/                   ← (see gateway/config above)
 └── ledger/config/                    ← ledger-service only (settlement Kafka, Redis)
 ```
 
-**Rule of thumb**
+**Rule of thumb (gateway)**
 
-| Layer | What goes here |
-|--------|----------------|
-| `controller` | HTTP only (+ request/response DTOs) |
-| `service` | Use cases / orchestration |
-| `application` | Validators, mappers, shared models |
-| `domain` | Tables / entities |
-| `port` | Interfaces |
-| `infrastructure` | Redis, Kafka, DB implementations |
+| Package | What goes here | Example |
+|---------|----------------|---------|
+| `controller` | HTTP only (+ DTOs) | `PaymentController` |
+| `service` | Business flow | `PaymentService`, `PendingPaymentService` |
+| `repository` | PostgreSQL | `PaymentRepository` |
+| `cache` | Redis | `PaymentIdempotencyCache`, `PaymentBalanceCache` |
+| `client` | HTTP to ledger | `LedgerBalanceClient` |
+| `event` | Kafka publish | `PaymentEventProducer` |
+| `application/mapper` | Request mapping | `PaymentCommandMapper` |
+
+**Ledger** still uses `port/` + `infrastructure/` adapters; gateway keeps logic in the packages above so **Go to Definition** opens the real implementation.
+
+**Constructor injection:** Spring beans use `private final` dependencies and an explicit constructor (no Lombok `@RequiredArgsConstructor`).
 
 ---
 
-## 1b. SOLID principles (how this repo applies them)
+## 1b. Design notes
 
-| Principle | Meaning here | Examples |
-|-----------|----------------|----------|
-| **S** — Single responsibility | One class, one reason to change | `PaymentInitiatedEventValidator`, `PaymentInitiatedSettlementHandler`, `RedisTransactionStatusCache` |
-| **O** — Open/closed | Extend via new adapters, not editing core logic | New `BalanceStore` impl; `NoOpPaymentEventPublisher` when Kafka off |
-| **L** — Liskov substitution | Ports can be swapped in tests/prod | `RedisBalanceStore` / mocks implement `BalanceStore` |
-| **I** — Interface segregation | Small ports, not full `JpaRepository` in application code | `SettlementAccountStore`, `TransactionStatusWriter`, `TransactionStatusCache` |
-| **D** — Dependency inversion | Application depends on `port.*`, not Redis/JPA types | `LedgerSettlementService` → `SettlementAccountStore`; listeners → handlers |
-
-**Do not** inject `RedisBalanceStore` or `TransactionRepository` into `service` classes — use the matching **port**.
-
-**DIP in practice:** HTTP DTOs stay in `controller.dto`. Services and ports use `model.PaymentCommand`. The controller maps once via `PaymentCommandMapper.fromRequest(...)`.
-
-**Constructor injection:** Spring beans use `private final` dependencies and an explicit constructor (no Lombok `@RequiredArgsConstructor`). Tests may still use `@Autowired` on fields.
+| Idea | Gateway | Ledger |
+|------|---------|--------|
+| One class per job | `PaymentIdempotencyCache` = Redis idempotency code | `SettlementService` + `PaymentSettlementProcessor` |
+| HTTP vs domain | `controller.dto` for API; `model.PaymentCommand` inside services | Same pattern |
+| Kafka off locally | `PaymentEventProducer` no-ops when `app.kafka.enabled=false` | `NoOpSettlementEventProducer` when Kafka disabled |
 
 ---
 
@@ -88,12 +83,12 @@ com/swiftpay/
 |--------|------------|---------|
 | Entity | Noun, `PaymentTransaction` | Was `Transcation` (typo fixed) |
 | REST controller | `*Controller` | `PaymentController` |
-| Use case interface | `*UseCase` | `PaymentInitiationUseCase` |
-| Use case impl | `*Service` | `PaymentInitiationService` |
-| Kafka listener | `*Listener` | `PaymentInitiatedListener` |
-| Kafka publisher | `*Publisher` | `KafkaPaymentEventPublisher` |
-| Port | Noun | `BalanceStore`, `IdempotencyGuard` |
-| Adapter | Technology prefix | `RedisBalanceStore`, `JpaTransactionWriter` |
+| Service (gateway) | `*Service` | `PaymentService`, `PendingPaymentService` |
+| Kafka listener | `*Listener` | `PaymentResultKafkaListener`, `PaymentInitiatedKafkaListener` |
+| Kafka publish (gateway) | `*Producer` | `PaymentEventProducer` |
+| Redis helper (gateway) | `Payment*Cache` / `DuplicatePaymentChecker` | `PaymentIdempotencyCache` |
+| HTTP client (gateway) | `*Client` | `LedgerBalanceClient` |
+| Repository (gateway) | `PaymentRepository` | Wraps `TransactionJpaRepository` |
 | Event | `Payment*Event` | `PaymentInitiatedEvent` |
 | Log tag | `[PAYMENT_FLOW]` or `[LEDGER_FLOW]` | Search logs easily |
 
@@ -178,16 +173,16 @@ flowchart LR
 | Task | Go to |
 |------|--------|
 | Change payment API | `gateway/controller/PaymentController.java` |
-| Add validation rule | `gateway/application/validation/` |
-| Change idempotency | `gateway/infrastructure/redis/RedisIdempotencyGuard.java` |
-| Change balance check | `SufficientBalanceValidator` + `BalanceCacheRefresher` + `HttpLedgerBalanceReader` |
-| Reject unknown sender/receiver | `AccountExistenceValidator` (HTTP balance → 404) |
-| Ledger missing account | `LedgerSettlementService` → FAILED + `account not found` |
+| Add validation rule | `gateway/service/validation/PaymentRequestValidator.java` |
+| Change idempotency | `gateway/cache/PaymentIdempotencyCache.java` |
+| Change balance check | `PaymentRequestValidator` + `client/LedgerBalanceClient.java` |
+| Reject unknown sender/receiver | `PaymentRequestValidator` (HTTP balance → 404) |
+| Ledger missing account | `PaymentSettlementProcessor` → FAILED + `account not found` |
 | Ledger balance HTTP API | `ledger/controller/LedgerBalanceController.java` → `GET /v1/accounts/{userId}/balance` |
-| Change DB save | `gateway/service/PaymentPersistenceService.java` |
-| Change settlement | `ledger/application/LedgerSettlementService.java` |
+| Change DB save | `gateway/service/PendingPaymentService.java` |
+| Change settlement | `ledger/service/PaymentSettlementProcessor.java` |
 | Change Kafka topic names | `application.yml` → `app.kafka.topics` |
-| Change consumer retry | `infrastructure/config/KafkaConsumerRetryConfig.java` |
+| Change consumer retry | `gateway/config/KafkaConsumerRetryConfig.java` |
 | Change history API | `ledger/controller/LedgerHistoryController.java` |
 | New shared event field | `shared/event/PaymentInitiatedEvent.java` (+ all events) |
 

@@ -32,7 +32,7 @@ public class KafkaConsumerRetryConfig {
 
         DefaultErrorHandler handler = new DefaultErrorHandler(
                 (ConsumerRecord<?, ?> record, Exception ex) -> log.error(
-                        "Kafka consumer retries exhausted topic={} partition={} offset={}",
+                        "kafka retries exhausted {}:{}@{}",
                         record.topic(), record.partition(), record.offset(), ex),
                 backOff);
 

@@ -1,7 +1,7 @@
 package com.swiftpay.ledger.controller;
 
 import com.swiftpay.ledger.controller.dto.TransactionHistoryItem;
-import com.swiftpay.ledger.service.TransactionHistoryUseCase;
+import com.swiftpay.ledger.service.LedgerService;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.Positive;
@@ -19,10 +19,10 @@ import java.util.List;
 @RequestMapping("/v1/history")
 public class LedgerHistoryController {
 
-    private final TransactionHistoryUseCase transactionHistoryUseCase;
+    private final LedgerService ledgerService;
 
-    public LedgerHistoryController(TransactionHistoryUseCase transactionHistoryUseCase) {
-        this.transactionHistoryUseCase = transactionHistoryUseCase;
+    public LedgerHistoryController(LedgerService ledgerService) {
+        this.ledgerService = ledgerService;
     }
 
 
@@ -30,6 +30,6 @@ public class LedgerHistoryController {
     public List<TransactionHistoryItem> getHistory(
             @PathVariable @Positive Long userId,
             @RequestParam(defaultValue = "50") @Min(1) @Max(200) int limit) {
-        return transactionHistoryUseCase.getHistoryForUser(userId, limit);
+        return ledgerService.getHistoryForUser(userId, limit);
     }
 }

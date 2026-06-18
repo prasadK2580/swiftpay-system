@@ -29,3 +29,9 @@ logging:
     com.swiftpay: INFO
     org.hibernate.SQL: WARN
     org.springframework.kafka: WARN
+
+app:
+  kafka:
+    admin:
+      partitions: ${APP_KAFKA_TOPIC_PARTITIONS:12}
+      replicas: ${APP_KAFKA_TOPIC_REPLICAS:1}

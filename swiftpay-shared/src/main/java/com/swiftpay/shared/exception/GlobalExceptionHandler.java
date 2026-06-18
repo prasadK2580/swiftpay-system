@@ -48,8 +48,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<Map<String, Object>> handleUnreadableBody(HttpMessageNotReadableException ex) {
-        String hint = "Request body must be valid JSON (Postman: Body → raw → JSON, no backslash escapes)";
-        log.warn("Malformed request body: {}", ex.getMessage());
+        String hint = "Request body must be valid JSON";
         return ResponseEntity.status(HttpStatus.BAD_REQUEST)
                 .body(errorBody(HttpStatus.BAD_REQUEST, hint, null));
     }
@@ -99,7 +98,7 @@ public class GlobalExceptionHandler {
 
     @ExceptionHandler(Exception.class)
     public ResponseEntity<Map<String, Object>> handleUnexpected(Exception ex) {
-        log.error("Unhandled exception", ex);
+        log.error("unhandled: {}", ex.toString(), ex);
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                 .body(errorBody(HttpStatus.INTERNAL_SERVER_ERROR, "An unexpected error occurred", null));
     }

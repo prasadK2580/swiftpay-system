@@ -15,7 +15,7 @@ spring:
     hibernate:
       ddl-auto: validate
     defer-datasource-initialization: true
-    show-sql: true
+    show-sql: false
 
   sql:
     init:
@@ -60,6 +60,9 @@ app:
     server-url: ${APP_OPENAPI_SERVER_URL:}
   kafka:
     enabled: true
+    admin:
+      partitions: ${APP_KAFKA_TOPIC_PARTITIONS:6}
+      replicas: ${APP_KAFKA_TOPIC_REPLICAS:1}
     topics:
       payment-initiated: payment.initiated
       payment-completed: payment.completed
@@ -77,10 +80,18 @@ app:
   redis:
     ttl-hours: 24
 
+logging:
+  level:
+    root: WARN
+    com.swiftpay: WARN
+    org.springframework: WARN
+    org.hibernate: WARN
+    org.apache.kafka: WARN
+
 management:
   endpoint:
     health:
-      show-details: always
+      show-details: never
       probes:
         enabled: true
   health:
@@ -92,5 +103,8 @@ management:
       enabled: true
   endpoints:
     web:
+      base-path: /
       exposure:
-        include: health,info
+        include: health
+      path-mapping:
+        health: health

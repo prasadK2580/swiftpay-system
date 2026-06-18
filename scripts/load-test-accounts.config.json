@@ -1,0 +1,26 @@
+{
+  "postgres": {
+    "container": "swiftpay-postgres",
+    "database": "swiftpay",
+    "user": "postgres"
+  },
+  "redis": {
+    "container": "swiftpay-redis"
+  },
+  "ledger": {
+    "baseUrl": "http://127.0.0.1:8081"
+  },
+  "currency": "INR",
+  "loadTestSenderId": 1001,
+  "loadTestReceiverId": 2002,
+  "topupBalance": 20000000000000,
+  "extraAccounts": {
+    "startId": 4001,
+    "count": 20,
+    "initialBalance": 100000
+  },
+  "defaultAccounts": [
+    { "userId": 1001, "balance": 10000 },
+    { "userId": 2002, "balance": 5000 }
+  ]
+}

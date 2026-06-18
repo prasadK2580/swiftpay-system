@@ -24,6 +24,35 @@ Client → gateway (8080) → PostgreSQL transactions (PENDING)
 
 Logical **Service A** (gateway) and **Service B** (ledger) are separate Spring Boot apps in one repo, connected by **Kafka** (settlement) and **HTTP** (`APP_LEDGER_HTTP_BASE_URL`, default `http://ledger:8081` in Docker).
 
+### Layered structure (per service)
+
+```text
+┌──────────────────────────────────────────────┐
+│  1. config          — Postgres, Redis, Kafka   │
+└──────────────────────┬───────────────────────┘
+                       ▼
+              2. controller — HTTP + validation
+                       ▼
+         3. service — business orchestration
+                       │
+     ┌─────────────────┼─────────────────┐
+     ▼                 ▼                 ▼
+  cache (Redis)   repository (SQL)   event (Kafka)
+     │                                   │
+  client (HTTP)              infrastructure/kafka (consumer)
+```
+
+| Layer | Gateway | Ledger |
+|-------|---------|--------|
+| Controller | `PaymentController` | `LedgerBalanceController`, `LedgerHistoryController` |
+| Service | `PaymentService`, `PendingPaymentService`, `PaymentIdempotencyService` | `LedgerService`, `SettlementService` |
+| Validation | `PaymentRequestValidator` | `PaymentInitiatedMessageValidator` |
+| Save + publish | `PendingPaymentService` (DB commit → `PaymentEventProducer`) | — |
+| Repository | `PaymentRepository` → `TransactionJpaRepository` | `AccountRepository`, `SettlementTransactionRepository`, `PaymentHistoryRepository` (+ Postgres adapters) |
+| Event (Kafka) | `PaymentEventProducer`, `PaymentResultKafkaListener` | `SettlementEventProducer`, `PaymentInitiatedKafkaListener` |
+| Cache (Redis) | `PaymentIdempotencyCache`, `PaymentBalanceCache`, `DuplicatePaymentChecker`, `PaymentStatusCache` | `AccountBalanceCache`, `AccountBalanceRedisUpdater` |
+| External HTTP | `LedgerBalanceClient` (calls ledger for balance) | — |
+
 ## Mandatory stack
 
 | Technology | Usage |
