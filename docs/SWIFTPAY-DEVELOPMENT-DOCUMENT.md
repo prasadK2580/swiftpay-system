@@ -110,9 +110,16 @@ This matches classic **microservice boundaries**: gateway orchestrates; ledger o
 Both services connect to the same PostgreSQL database `swiftpay` for the hackathon (pragmatic shared DB):
 
 - **Gateway** JPA entity: `transactions` only (`ddl-auto: validate`).
-- **Ledger** JPA entities: `accounts` and `transactions` (schema init via `schema.sql` / `data.sql`).
+- **Ledger** JPA entities: `accounts` and `transactions` (`ddl-auto: validate`).
 
-In production, databases would often be split; shared DB is acceptable for demo and load test.
+**Schema and seed data** (accounts 1001 / 2002):
+
+| Environment | How schema + seed are applied |
+|-------------|------------------------------|
+| Local IDE (ledger default profile) | Spring `sql.init` runs `schema.sql` / `data.sql` on ledger startup |
+| Docker Compose / CI `docker-build` | Postgres mounts scripts into `docker-entrypoint-initdb.d` (first volume only); apps use `prod` profile → `sql.init.mode: never` |
+| CI `integration-test` job | Manual `psql` after infra starts (same SQL files) |
+| Kubernetes | Apply `schema.sql` / `data.sql` manually after Postgres is ready (see `k8s/README.md`) |
 
 ---
 
@@ -240,12 +247,13 @@ In production, databases would often be split; shared DB is acceptable for demo 
 
 ### 5.3 Seed data
 
-Accounts created on ledger startup (`data.sql`):
+Accounts **1001** (10,000 INR) and **2002** (5,000 INR) come from `ledger-service/src/main/resources/data.sql`:
 
-| user_id | balance | currency |
-|---------|---------|----------|
-| 1001 | 10000 | INR |
-| 2002 | 5000 | INR |
+| Environment | When seed runs |
+|-------------|----------------|
+| Local ledger (default profile) | Ledger startup via Spring `sql.init` |
+| `docker compose up` | Postgres first-init (`docker-entrypoint-initdb.d`) |
+| CI integration job | Explicit `psql` before tests |
 
 For **1 million** load tests with `amount=1`, run `scripts/sql/ensure-load-test-balance.sql` to set sender balance to 2,000,000,000.
 
@@ -344,21 +352,25 @@ transaction-gateway-service/
 | `infrastructure.kafka` | Kafka consume | `PaymentResultKafkaListener` |
 | `config` | Spring `@Configuration` | Kafka, Redis, HTTP |
 
-**Ledger (Service B)** — still uses port + infrastructure adapters:
+**Ledger (Service B)** — same layered style; Postgres/Redis/Kafka adapters under `infrastructure/`:
 
-| Layer | Package | Responsibility |
-|-------|---------|----------------|
-| API | `controller` | REST controllers, DTOs |
-| Application | `service` | Settlement, balance/history |
-| Domain | `entity`, `model` | JPA entities, settlement models |
-| Port | `port` | Interfaces for adapters |
-| Infrastructure | `infrastructure` | Redis, Kafka, JPA adapters |
-| Config | `config` | Spring `@Configuration` |
+| Package | Responsibility | Key classes |
+|---------|----------------|-------------|
+| `controller` | REST + DTOs | `LedgerBalanceController`, `LedgerHistoryController` |
+| `service` | Settlement + queries | `SettlementService`, `LedgerService`, `PaymentSettlementProcessor`, `PaymentInitiatedMessageValidator` |
+| `service.impl` | Default implementations | `SettlementServiceImpl`, `LedgerServiceImpl` |
+| `repository` | Domain + JPA | `AccountRepository`, `SettlementTransactionRepository`, `PaymentHistoryRepository`, `*JpaRepository` |
+| `infrastructure.persistence` | Postgres adapters | `AccountPostgresRepository`, `SettlementTransactionPostgresRepository`, `PaymentHistoryPostgresRepository` |
+| `cache` | Redis balance | `AccountBalanceCache` |
+| `infrastructure.redis` | Redis adapter | `RedisAccountBalanceCache` |
+| `event` | Kafka publish interface | `SettlementEventProducer` |
+| `infrastructure.kafka` | Kafka impl + consume | `KafkaSettlementEventProducer`, `PaymentInitiatedKafkaListener` |
+| `config` | Spring `@Configuration` | Kafka, Redis, OpenAPI |
 
 ### 10.3 Design highlights
 
 - **Single responsibility:** Kafka listeners delegate to services; validation separate from persistence.
-- **Gateway readability:** One `@Component` / `@Repository` per concern (`cache/`, `client/`, `event/`).
+- **Flat packages:** Gateway and ledger use `cache/`, `client/`, `event/`, `repository/` (gateway) or `repository/` + `infrastructure/*` (ledger) — no hexagonal `port/` interfaces.
 - **Async settlement:** Gateway saves PENDING, publishes Kafka; ledger settles; gateway updates status on feedback.
 
 ### 10.4 Key classes (quick index)
@@ -391,9 +403,9 @@ docker compose up --build
 
 Services: `postgres`, `redis`, `kafka`, `ledger` (8081), `gateway` (8080).
 
-Environment: `SPRING_PROFILES_ACTIVE=docker,performance` for tuned pools and Kafka concurrency.
-
-Gateway env: `APP_LEDGER_HTTP_BASE_URL=http://ledger:8081`.
+- **Postgres init:** `schema.sql` and `data.sql` mounted to `/docker-entrypoint-initdb.d/` (runs once per new volume; use `docker compose down -v` to reset).
+- **Profiles:** `SPRING_PROFILES_ACTIVE=docker,prod,performance` on ledger and gateway (`prod` disables Spring SQL init; Hibernate `validate` expects tables from Postgres init).
+- **Gateway → ledger:** `APP_LEDGER_HTTP_BASE_URL=http://ledger:8081`.
 
 ### 11.2 Local development (two terminals)
 
@@ -411,9 +423,13 @@ Manifests under `k8s/`: namespace, postgres, redis, kafka, separate deployments 
 
 GitHub Actions (`.github/workflows/ci.yml`):
 
-1. Compile + unit tests (exclude integration)
-2. Integration tests with Docker infra (`-Pintegration-tests` for gateway E2E)
-3. Docker Compose smoke test (both `/health` endpoints)
+| Job | Steps |
+|-----|--------|
+| **compile-and-unit-test** | `./mvnw clean install -DskipTests`; `./mvnw test -pl gateway-service -Dtest=PaymentRequestValidatorTest` (parent POM excludes `*IntegrationTest`; ledger has no unit tests) |
+| **integration-test** | `docker compose up -d postgres redis kafka` → wait for health → `psql` seed `schema.sql` + `data.sql` → `./mvnw test -pl ledger-service,gateway-service -Dtest='*IntegrationTest' -Dspring.profiles.active=integration-test` |
+| **docker-build** | `docker compose up -d --build` → curl gateway and ledger `/health` (Postgres init via compose mounts) |
+
+Each job tears down with `docker compose down -v` so the next run gets a fresh Postgres volume.
 
 ---
 
@@ -421,18 +437,29 @@ GitHub Actions (`.github/workflows/ci.yml`):
 
 | Test type | Location | What it proves |
 |-----------|----------|----------------|
-| Unit | `PaymentRequestValidatorTest` | Validation rules |
+| Unit | `PaymentRequestValidatorTest` | Validation rules (only unit test run in CI) |
 | Ledger integration | `LedgerBalanceApiIntegrationTest` | Balance API 200/404 |
 | Gateway integration | `PaymentApiIntegrationTest` | POST returns 201 PENDING |
 | Gateway integration | `InsufficientFundsIntegrationTest` | POST returns 422 |
 | Gateway E2E | `PaymentStatusIntegrationTest` | POST + GET `/v1/payments/{id}` until COMPLETED |
-| Gateway integration | `PaymentApiIntegrationTest`, `UnknownReceiverIntegrationTest` | POST payment + validation |
+| Gateway integration | `UnknownReceiverIntegrationTest` | Unknown account → 404 |
 
-Run all tests:
+**Gateway E2E harness:** `IntegrationTestBase` starts `LedgerApplication` in-process on a random port before `GatewayApplication` loads, sets `app.ledger.http.base-url`, uses unique Kafka consumer group IDs, and polls `GET /v1/accounts/1001/balance` until seed data is ready. Each test method runs `@Sql("/sql/integration-test-reset.sql")` to reset accounts and transactions.
+
+**Run locally (unit only — same as CI):**
+
+```bash
+./mvnw -B clean install -DskipTests
+./mvnw -B test -pl gateway-service -Dtest=PaymentRequestValidatorTest
+```
+
+**Run integration tests (same as CI):**
 
 ```bash
 docker compose up -d postgres redis kafka
-./mvnw -B clean verify
+# seed DB (see DEPLOYMENT-GUIDE.md), then:
+./mvnw -B clean install -DskipTests
+./mvnw -B test -pl ledger-service,gateway-service -Dtest='*IntegrationTest' -Dspring.profiles.active=integration-test
 ```
 
 ---

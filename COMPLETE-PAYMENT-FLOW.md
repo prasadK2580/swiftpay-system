@@ -169,7 +169,7 @@ CLIENT
          │
          ├─→ paymentEventProducer.publishPaymentInitiated(response)
          │    │
-         │    └─→ Kafka Topic: "payment-initiated"
+         │    └─→ Kafka Topic: "payment.initiated"
          │        Message: {
          │          transactionId: "uuid-123",
          │          senderId, receiverId, amount, currency,
@@ -187,7 +187,7 @@ CLIENT
       }
 
     ✓ Kafka Producer:
-      Publishes PaymentInitiated event to "payment-initiated" topic
+      Publishes PaymentInitiated event to "payment.initiated" topic
 
 
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -205,7 +205,7 @@ CLIENT
       "createdAt": "2026-05-24T..."
     }
 
-    ✓ Client receives 200 OK
+    ✓ Client receives 201 Created
     ✓ Client can now poll: GET /v1/payments/uuid-123
 
 
@@ -221,8 +221,8 @@ CLIENT
          │
          └─→ Publish PaymentCompletedEvent OR PaymentFailedEvent
              to Kafka topics:
-               ✓ "payment-completed" topic  OR
-               ✗ "payment-failed" topic
+               ✓ "payment.completed" topic  OR
+               ✗ "payment.failed" topic
 
 
 ┌─────────────────────────────────────────────────────────────────────────────┐

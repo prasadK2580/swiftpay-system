@@ -48,7 +48,7 @@ Logical **Service A** (gateway) and **Service B** (ledger) are separate Spring B
 | Service | `PaymentService`, `PendingPaymentService`, `PaymentIdempotencyService` | `LedgerService`, `SettlementService` |
 | Validation | `PaymentRequestValidator` | `PaymentInitiatedMessageValidator` |
 | Save + publish | `PendingPaymentService` (DB commit → `PaymentEventProducer`) | — |
-| Repository | `PaymentRepository` → `TransactionJpaRepository` | `AccountRepository`, `SettlementTransactionRepository`, `PaymentHistoryRepository` (+ Postgres adapters) |
+| Repository | `PaymentRepository` → `TransactionJpaRepository` | `AccountRepository`, `SettlementTransactionRepository`, `PaymentHistoryRepository` (+ `*PostgresRepository` adapters) |
 | Event (Kafka) | `PaymentEventProducer`, `PaymentResultKafkaListener` | `SettlementEventProducer`, `PaymentInitiatedKafkaListener` |
 | Cache (Redis) | `PaymentIdempotencyCache`, `PaymentBalanceCache`, `DuplicatePaymentChecker`, `PaymentStatusCache` | `AccountBalanceCache`, `AccountBalanceRedisUpdater` |
 | External HTTP | `LedgerBalanceClient` (calls ledger for balance) | — |
@@ -71,6 +71,8 @@ Logical **Service A** (gateway) and **Service B** (ledger) are separate Spring B
 ```bash
 docker compose up --build
 ```
+
+On **first** Postgres volume creation, `schema.sql` and `data.sql` are applied automatically via `docker-entrypoint-initdb.d` (required because `prod` profile sets `spring.sql.init.mode: never` on both apps). To re-seed from scratch: `docker compose down -v` then `up` again.
 
 | URL | Purpose |
 |-----|---------|
@@ -97,7 +99,8 @@ curl "http://localhost:8080/v1/payments/{transactionId}"
 
 ```bash
 docker compose up -d postgres redis kafka
-./mvnw -B clean verify
+./mvnw -B clean install -DskipTests
+./mvnw -B test -pl gateway-service -Dtest=PaymentRequestValidatorTest
 ```
 
 Run from repo root (builds `swiftpay-shared` automatically):
@@ -126,7 +129,7 @@ Or IDE: `LedgerApplication` (8081), then `GatewayApplication` (8080). Requires `
 | Environment | Profile | Infra hosts |
 |-------------|---------|-------------|
 | Local IDE | *(default)* | `localhost` (Postgres, Redis, Kafka, ledger `:8081`) |
-| Docker / K8s | `docker,prod` | `postgres`, `redis`, `kafka:29092`, `ledger` / `swiftpay-ledger` |
+| Docker / K8s | `docker,prod,performance` | `postgres`, `redis`, `kafka:29092`, `ledger` / `swiftpay-ledger` |
 
 Override via environment variables (see [`.env.example`](.env.example)):
 
@@ -152,13 +155,33 @@ See [docs/DEPLOYMENT-GUIDE.md](docs/DEPLOYMENT-GUIDE.md) and [k8s/README.md](k8s
 
 ## Tests & CI
 
+GitHub Actions (`.github/workflows/ci.yml`) runs three jobs:
+
+| Job | What runs |
+|-----|-----------|
+| **compile-and-unit-test** | `./mvnw clean install -DskipTests`, then `PaymentRequestValidatorTest` only (`*IntegrationTest` excluded via parent Surefire config) |
+| **integration-test** | Infra via Compose → manual `psql` seed (`schema.sql`, `data.sql`) → `*IntegrationTest` on ledger + gateway with `integration-test` profile |
+| **docker-build** | Full `docker compose up --build` + `/health` on :8080 and :8081 (Postgres init scripts mounted in compose) |
+
+**Local — unit tests (same as CI):**
+
 ```bash
-./mvnw test -Dtest='!*IntegrationTest'
-docker compose up -d postgres redis kafka
-./mvnw test -Pintegration-tests -Dtest='*IntegrationTest' -Dspring.profiles.active=integration-test
+./mvnw -B clean install -DskipTests
+./mvnw -B test -pl gateway-service -Dtest=PaymentRequestValidatorTest
 ```
 
-Cross-service E2E tests live in `gateway-service` (in-process ledger + gateway). Ledger-only tests are in `ledger-service`.
+**Local — integration tests (same as CI):**
+
+```bash
+docker compose up -d postgres redis kafka
+# wait for postgres, then:
+docker compose exec -T postgres psql -U postgres -d swiftpay < ledger-service/src/main/resources/schema.sql
+docker compose exec -T postgres psql -U postgres -d swiftpay < ledger-service/src/main/resources/data.sql
+./mvnw -B clean install -DskipTests
+./mvnw -B test -pl ledger-service,gateway-service -Dtest='*IntegrationTest' -Dspring.profiles.active=integration-test
+```
+
+Cross-service E2E tests live in `gateway-service`: `IntegrationTestBase` starts **in-process ledger** on a random port before the gateway context loads, polls seed account `1001` via HTTP, and resets DB state with `@Sql` before each test. Ledger-only integration tests are in `ledger-service`.
 
 ## Documentation
 

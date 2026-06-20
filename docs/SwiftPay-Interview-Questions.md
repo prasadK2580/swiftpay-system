@@ -174,13 +174,13 @@
 
 ## Part 7 — Clean Architecture & Code Quality
 
-72. Explain your port vs infrastructure packages (or service/cache/repository layers).
+72. Explain your layered packages (`service`, `cache`, `repository`, `infrastructure`) — why no separate `port/` interfaces?
 
-73. What is PaymentInitiationUseCase vs PaymentInitiationService? Why the interface?
+73. What is the role of `PaymentService` vs `PendingPaymentService` vs `PaymentIdempotencyService`?
 
 74. How do you test settlement logic without Kafka and Redis running?
 
-75. Show one integration test. What is real (Testcontainers) vs mocked/in-process?
+75. Show one integration test. Gateway E2E uses real Postgres/Redis/Kafka plus **in-process** `LedgerApplication` (`IntegrationTestBase`) — not Testcontainers. What is reset between tests?
 
 76. How do you enforce API standards — OpenAPI, error shape, HTTP codes? Show 409 vs 422 vs 404.
 
@@ -264,7 +264,7 @@
 
 110. How did GitHub Actions help?
 
-111. Why separate integration profile?
+111. Why `-Dspring.profiles.active=integration-test` and unique Kafka consumer groups in `IntegrationTestBase`?
 
 112. What does the /health endpoint validate?
 
