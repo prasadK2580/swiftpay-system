@@ -22,7 +22,7 @@ jobs:
       - name: Compile and unit tests
         run: |
           chmod +x mvnw
-          ./mvnw -B clean package -DskipTests
+          ./mvnw -B clean install -DskipTests
           ./mvnw -B test -pl ledger-service,gateway-service -Dtest='!*IntegrationTest'
 
   integration-test:
