@@ -23,7 +23,7 @@ jobs:
         run: |
           chmod +x mvnw
           ./mvnw -B clean package -DskipTests
-          ./mvnw -B test -Dtest='!*IntegrationTest' -Dsurefire.failIfNoSpecifiedTests=false
+          ./mvnw -B test -pl ledger-service,gateway-service -Dtest='!*IntegrationTest'
 
   integration-test:
     runs-on: ubuntu-latest
