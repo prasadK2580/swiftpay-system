@@ -23,7 +23,8 @@ jobs:
         run: |
           chmod +x mvnw
           ./mvnw -B clean install -DskipTests
-          ./mvnw -B test -pl ledger-service,gateway-service
+          # Ledger has no unit tests; gateway runs validator tests only (integration tests run in next job).
+          ./mvnw -B test -pl gateway-service -Dtest=PaymentRequestValidatorTest
 
   integration-test:
     runs-on: ubuntu-latest
