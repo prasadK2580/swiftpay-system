@@ -23,7 +23,7 @@ jobs:
         run: |
           chmod +x mvnw
           ./mvnw -B clean package -DskipTests
-          ./mvnw -B test -Dtest='!*IntegrationTest'
+          ./mvnw -B test -Dtest='!*IntegrationTest' -Dsurefire.failIfNoSpecifiedTests=false
 
   integration-test:
     runs-on: ubuntu-latest
