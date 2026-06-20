@@ -45,7 +45,7 @@ postgres / redis / kafka
     └─────────┘
 ```
 
-- **postgres** — shared DB: `transactions` + `accounts`.
+- **postgres** — shared DB: `transactions` + `accounts`. On **first** empty volume, runs `ledger-service/src/main/resources/schema.sql` and `data.sql` from `/docker-entrypoint-initdb.d/` (compose volume mounts). Apps use `prod` profile → they do **not** run SQL init themselves.
 - **redis** — idempotency (24h), balance cache, tx dedup.
 - **kafka** — `payment.initiated` → settlement → `payment.completed` / `payment.failed`.
 - **ledger** — Service B (`ledger-service`, port **8081**).
@@ -62,7 +62,9 @@ cd d:\transaction-gateway-service
 docker compose up --build
 ```
 
-Wait until you see the app healthy (~1–2 minutes first time). Then check:
+Wait until you see the app healthy (~1–2 minutes first time). Postgres init scripts run only when the `swiftpay_pg_data` volume is new; use `docker compose down -v` before `up` if you need a clean schema + seed.
+
+Then check:
 
 | URL | Purpose |
 |-----|---------|
@@ -102,10 +104,18 @@ Stop everything:
 docker compose down
 ```
 
-Remove DB volume (fresh data):
+Remove DB volume (fresh schema + seed on next `up`):
 
 ```powershell
 docker compose down -v
+```
+
+**Manual seed** (infra-only compose — same as CI integration job):
+
+```powershell
+docker compose up -d postgres redis kafka
+Get-Content ledger-service\src\main\resources\schema.sql | docker compose exec -T postgres psql -U postgres -d swiftpay -v ON_ERROR_STOP=1
+Get-Content ledger-service\src\main\resources\data.sql | docker compose exec -T postgres psql -U postgres -d swiftpay -v ON_ERROR_STOP=1
 ```
 
 ---
@@ -146,10 +156,10 @@ docker compose exec postgres psql -U postgres -d swiftpay -c "SELECT user_id, ba
 docker compose exec postgres psql -U postgres -d swiftpay -c "UPDATE accounts SET balance = 100000000 WHERE user_id = 1001;"
 ```
 
-**Refresh Redis** after DB change (either restart app or POST a payment so `BalanceCacheRefresher` runs):
+**Refresh Redis** after DB change (restart apps or POST a payment so balance cache refreshes):
 
 ```powershell
-docker compose restart app
+docker compose restart gateway ledger
 ```
 
 ---
@@ -162,15 +172,15 @@ On every push/PR to `main`, `master`, or `develop`:
 
 | Job | What it does |
 |-----|----------------|
-| **compile-and-unit-test** | `./mvnw package` + unit tests (no Docker) |
-| **integration-test** | `docker compose up` postgres/redis/kafka → `PaymentApiIntegrationTest` |
-| **docker-build** | `docker compose up --build` + health checks on gateway and ledger |
+| **compile-and-unit-test** | `./mvnw clean install -DskipTests`; `./mvnw test -pl gateway-service -Dtest=PaymentRequestValidatorTest` (parent Surefire excludes `*IntegrationTest`; ledger has no unit tests) |
+| **integration-test** | Start postgres/redis/kafka → wait → `psql` apply `schema.sql` + `data.sql` → `./mvnw test -pl ledger-service,gateway-service -Dtest='*IntegrationTest' -Dspring.profiles.active=integration-test` → `docker compose down -v` |
+| **docker-build** | `docker compose up -d --build` → poll gateway and ledger `/health` → `docker compose down -v` |
 
 **Enable on GitHub:**
 
 1. Push this repo to GitHub.
 2. Open **Actions** — workflow **CI** should run automatically.
-3. Fix any failures from the run log (usually Kafka slow start → increase wait loop).
+3. Fix any failures from the run log (usually Kafka slow start, or ledger exit if Postgres was not seeded).
 
 **Optional:** push image to GHCR — add a login + `docker push` step when you have a registry.
 
@@ -181,15 +191,21 @@ On every push/PR to `main`, `master`, or `develop`:
 **Unit tests only:**
 
 ```powershell
-.\mvnw.cmd test -Dtest="!PaymentApiIntegrationTest"
+.\mvnw.cmd -B clean install -DskipTests
+.\mvnw.cmd -B test -pl gateway-service -Dtest=PaymentRequestValidatorTest
 ```
 
-**Integration test (start infra first):**
+**Integration tests (start infra + seed DB first):**
 
 ```powershell
 docker compose up -d postgres redis kafka
-.\mvnw.cmd test -Dtest=PaymentApiIntegrationTest
+Get-Content ledger-service\src\main\resources\schema.sql | docker compose exec -T postgres psql -U postgres -d swiftpay -v ON_ERROR_STOP=1
+Get-Content ledger-service\src\main\resources\data.sql | docker compose exec -T postgres psql -U postgres -d swiftpay -v ON_ERROR_STOP=1
+.\mvnw.cmd -B clean install -DskipTests
+.\mvnw.cmd -B test -pl ledger-service,gateway-service -Dtest="*IntegrationTest" -Dspring.profiles.active=integration-test
 ```
+
+Gateway E2E tests use `IntegrationTestBase` (in-process ledger + unique Kafka groups). No Testcontainers.
 
 **Build JAR:**
 
@@ -222,12 +238,14 @@ Start with lower TPS until DB/Kafka pools are tuned; raise sender balance before
 
 | Symptom | Fix |
 |---------|-----|
+| **Ledger container exits (1)** on `docker compose up` | Empty Postgres + `prod` profile → `docker compose down -v` then `up` again so init scripts apply; verify compose postgres volume mounts |
 | App won’t start, Kafka errors | `docker compose logs kafka` — wait for health; retry `docker compose up` |
 | `Connection refused` to Kafka from IDE | Use `localhost:9092` on host; in Compose use `kafka:29092` (see `application-docker.yml`) |
 | 422 insufficient funds | Top up `accounts` (Step 5) |
 | Port 8080/8081 in use | Stop local Java or change compose `ports` mapping |
 | Gateway cannot reach ledger | Set `APP_LEDGER_HTTP_BASE_URL=http://ledger:8081` (Compose/K8s) |
-| CI integration job fails | Ensure `PaymentApiIntegrationTest` runs after compose health checks pass |
+| CI integration job fails | Ensure infra healthy and `schema.sql` / `data.sql` seeded before Maven |
+| CI docker-build fails | Check `docker compose logs ledger` — usually missing DB schema on first init |
 
 ---
 

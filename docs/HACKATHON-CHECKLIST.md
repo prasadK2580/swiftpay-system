@@ -23,11 +23,19 @@
 | Kafka consumer retry | `KafkaConsumerRetryConfig` |
 | /health | Spring Actuator (`/health`, `/actuator/health`) |
 | Dockerfile | `gateway-service/Dockerfile`, `ledger-service/Dockerfile` |
-| docker-compose (full stack) | `docker-compose.yml` (gateway + ledger) |
-| Kubernetes | `k8s/` (separate deployments) |
+| docker-compose (full stack) | `docker-compose.yml` (gateway + ledger; Postgres init via `docker-entrypoint-initdb.d`) |
+| Kubernetes | `k8s/` (separate deployments; manual DB seed — see `k8s/README.md`) |
 | Two microservices | `gateway-service` (A), `ledger-service` (B) |
-| GitHub Actions | `.github/workflows/ci.yml` |
+| GitHub Actions | `.github/workflows/ci.yml` (unit → integration → docker-build) |
 | Load test 250 TPS / 1M | `scripts/load-test.mjs` + `docs/LOAD-TEST-EVIDENCE.md` |
+
+## CI validation
+
+| Job | Validates |
+|-----|-----------|
+| compile-and-unit-test | `PaymentRequestValidatorTest`; Surefire excludes `*IntegrationTest` |
+| integration-test | Infra + DB seed + `*IntegrationTest` (in-process ledger E2E in gateway) |
+| docker-build | Full compose stack + `/health` on both services |
 
 ## Bonus (not implemented)
 

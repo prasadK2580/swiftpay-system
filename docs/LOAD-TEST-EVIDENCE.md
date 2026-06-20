@@ -15,7 +15,7 @@ Expected duration: **1,000,000 ÷ 250 ≈ 4,000 s (~66.7 min)**.
 
 ## Step 1 — Preconditions
 
-1. **Stack running** — gateway http://localhost:8080/health and ledger http://localhost:8081/health (`docker compose up --build` uses `docker,performance` profiles)  
+1. **Stack running** — gateway http://localhost:8080/health and ledger http://localhost:8081/health (`docker compose up --build`; profiles `docker,prod,performance`; Postgres seeded on first volume via compose init mounts)  
 2. **Sender balance** — user `1001` needs **≥ 1,000,000 INR** (amount=1 per tx) for all `201` responses:
 
 ```sql

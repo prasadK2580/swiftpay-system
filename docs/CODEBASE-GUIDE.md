@@ -38,15 +38,15 @@ com/swiftpay/
 │
 ├── ledger/                           ← SERVICE B — Ledger
 │   ├── controller/                   ← Balance + history REST + dto/
-│   ├── service/                      ← Settlement, balance/history queries
+│   ├── service/                      ← Settlement, balance/history, validators
+│   │   └── impl/                     ← LedgerServiceImpl, SettlementServiceImpl
 │   ├── model/                        ← SettlementResult, SettlementOutcome
 │   ├── entity/                       ← JPA entities
 │   ├── repository/                   ← Domain repos + Spring Data (*JpaRepository)
-│   ├── port/
-│   └── infrastructure/kafka/         ← Consume PaymentInitiated, emit Completed/Failed
-│
-├── gateway/config/                   ← (see gateway/config above)
-└── ledger/config/                    ← ledger-service only (settlement Kafka, Redis)
+│   ├── cache/                        ← AccountBalanceCache (Redis)
+│   ├── event/                        ← SettlementEventProducer (Kafka publish)
+│   ├── infrastructure/               ← Kafka listeners, Redis/Postgres adapters
+│   └── config/                       ← Kafka, Redis, OpenAPI
 ```
 
 **Rule of thumb (gateway)**
@@ -61,7 +61,7 @@ com/swiftpay/
 | `event` | Kafka publish | `PaymentEventProducer` |
 | `application/mapper` | Request mapping | `PaymentCommandMapper` |
 
-**Ledger** still uses `port/` + `infrastructure/` adapters; gateway keeps logic in the packages above so **Go to Definition** opens the real implementation.
+**Ledger** mirrors the same idea: `repository/` + `infrastructure/persistence/` for Postgres, `cache/` + `infrastructure/redis/` for Redis, `event/` + `infrastructure/kafka/` for Kafka. No separate `port/` layer — open the `@Repository` / `@Component` class directly.
 
 **Constructor injection:** Spring beans use `private final` dependencies and an explicit constructor (no Lombok `@RequiredArgsConstructor`).
 
@@ -181,6 +181,7 @@ flowchart LR
 | Ledger balance HTTP API | `ledger/controller/LedgerBalanceController.java` → `GET /v1/accounts/{userId}/balance` |
 | Change DB save | `gateway/service/PendingPaymentService.java` |
 | Change settlement | `ledger/service/PaymentSettlementProcessor.java` |
+| Change balance/history queries | `ledger/service/LedgerService.java`, `impl/LedgerServiceImpl.java` |
 | Change Kafka topic names | `application.yml` → `app.kafka.topics` |
 | Change consumer retry | `gateway/config/KafkaConsumerRetryConfig.java` |
 | Change history API | `ledger/controller/LedgerHistoryController.java` |
@@ -221,7 +222,21 @@ flowchart LR
 cd D:\transaction-gateway-service
 docker compose up -d postgres redis kafka
 # IDE: run LedgerApplication (8081) then GatewayApplication (8080)
-.\mvnw.cmd -B clean verify
+.\mvnw.cmd -B clean install -DskipTests
+.\mvnw.cmd -B test -pl gateway-service -Dtest=PaymentRequestValidatorTest
 ```
 
-Or full stack: `docker compose up --build`
+Or full stack (Postgres seeded on first volume): `docker compose up --build`
+
+### Integration tests (match CI)
+
+```powershell
+docker compose up -d postgres redis kafka
+# wait for pg_isready, then seed (init scripts only run on first empty volume):
+Get-Content ledger-service\src\main\resources\schema.sql | docker compose exec -T postgres psql -U postgres -d swiftpay -v ON_ERROR_STOP=1
+Get-Content ledger-service\src\main\resources\data.sql | docker compose exec -T postgres psql -U postgres -d swiftpay -v ON_ERROR_STOP=1
+.\mvnw.cmd -B clean install -DskipTests
+.\mvnw.cmd -B test -pl ledger-service,gateway-service -Dtest="*IntegrationTest" -Dspring.profiles.active=integration-test
+```
+
+Gateway E2E tests use `IntegrationTestBase`: in-process ledger on a free port, unique Kafka consumer groups, `@Sql` reset before each test.

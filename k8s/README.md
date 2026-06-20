@@ -23,6 +23,11 @@ kubectl apply -f k8s/redis.yaml
 kubectl apply -f k8s/kafka.yaml
 
 kubectl wait --for=condition=ready pod -l app=postgres -n swiftpay --timeout=180s
+
+# Seed schema + accounts (K8s Postgres has no init mount — same SQL as Docker Compose):
+cat ledger-service/src/main/resources/schema.sql | kubectl exec -i -n swiftpay deploy/postgres -- psql -U postgres -d swiftpay -v ON_ERROR_STOP=1
+cat ledger-service/src/main/resources/data.sql | kubectl exec -i -n swiftpay deploy/postgres -- psql -U postgres -d swiftpay -v ON_ERROR_STOP=1
+
 kubectl wait --for=condition=ready pod -l app=redis -n swiftpay --timeout=120s
 kubectl wait --for=condition=ready pod -l app=kafka -n swiftpay --timeout=300s
 
