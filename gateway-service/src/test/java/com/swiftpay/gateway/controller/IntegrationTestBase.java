@@ -33,33 +33,17 @@ public abstract class IntegrationTestBase {
     private static ConfigurableApplicationContext ledgerContext;
     private static int ledgerPort;
 
-    @BeforeAll
-    static void startLedger() throws IOException, InterruptedException {
-        if (ledgerContext != null) {
-            return;
-        }
-        synchronized (IntegrationTestBase.class) {
-            if (ledgerContext != null) {
-                return;
-            }
-            ledgerPort = findFreePort();
-            String ledgerGroup = "swiftpay-it-ledger-" + GROUP_SUFFIX;
-            ledgerContext = new SpringApplicationBuilder(LedgerApplication.class)
-                    .profiles("integration-test")
-                    .properties("spring.main.banner-mode=off")
-                    .run(
-                            "--server.port=" + ledgerPort,
-                            "--app.ledger.consumer.group-id=" + ledgerGroup,
-                            "--spring.kafka.consumer.auto-offset-reset=latest");
+    @DynamicPropertySource
+    static void integrationProperties(DynamicPropertyRegistry registry) {
+        ensureLedgerStarted();
+        registry.add("app.ledger.http.base-url", () -> "http://localhost:" + ledgerPort);
+        registry.add("app.gateway.consumer.group-id", () -> "swiftpay-it-gateway-" + GROUP_SUFFIX);
+        registry.add("spring.kafka.consumer.auto-offset-reset", () -> "latest");
+    }
 
-            await().atMost(30, SECONDS).ignoreExceptions().until(() -> {
-                var conn = java.net.URI.create("http://localhost:" + ledgerPort + "/health").toURL().openConnection();
-                conn.setConnectTimeout(2000);
-                conn.connect();
-                return true;
-            });
-            Thread.sleep(5000);
-        }
+    @BeforeAll
+    static void startLedger() {
+        ensureLedgerStarted();
     }
 
     @AfterAll
@@ -70,11 +54,39 @@ public abstract class IntegrationTestBase {
         }
     }
 
-    @DynamicPropertySource
-    static void integrationProperties(DynamicPropertyRegistry registry) {
-        registry.add("app.ledger.http.base-url", () -> "http://localhost:" + ledgerPort);
-        registry.add("app.gateway.consumer.group-id", () -> "swiftpay-it-gateway-" + GROUP_SUFFIX);
-        registry.add("spring.kafka.consumer.auto-offset-reset", () -> "latest");
+    private static void ensureLedgerStarted() {
+        if (ledgerContext != null) {
+            return;
+        }
+        synchronized (IntegrationTestBase.class) {
+            if (ledgerContext != null) {
+                return;
+            }
+            try {
+                ledgerPort = findFreePort();
+                String ledgerGroup = "swiftpay-it-ledger-" + GROUP_SUFFIX;
+                ledgerContext = new SpringApplicationBuilder(LedgerApplication.class)
+                        .profiles("integration-test")
+                        .properties("spring.main.banner-mode=off")
+                        .run(
+                                "--server.port=" + ledgerPort,
+                                "--app.ledger.consumer.group-id=" + ledgerGroup,
+                                "--spring.kafka.consumer.auto-offset-reset=latest");
+
+                await().atMost(30, SECONDS).ignoreExceptions().until(() -> {
+                    var conn = java.net.URI.create("http://localhost:" + ledgerPort + "/health")
+                            .toURL()
+                            .openConnection();
+                    conn.setConnectTimeout(2000);
+                    conn.connect();
+                    return true;
+                });
+                Thread.sleep(5000);
+            } catch (IOException | InterruptedException ex) {
+                Thread.currentThread().interrupt();
+                throw new IllegalStateException("Failed to start ledger for integration tests", ex);
+            }
+        }
     }
 
     private static int findFreePort() throws IOException {
