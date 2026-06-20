@@ -3,7 +3,15 @@ spring:
     consumer:
       auto-offset-reset: latest
   jpa:
+    hibernate:
+      ddl-auto: validate
+    defer-datasource-initialization: true
     show-sql: false
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema.sql
+      data-locations: classpath:data.sql
 
 app:
   ledger:

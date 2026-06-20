@@ -43,6 +43,13 @@ jobs:
           done
           exit 1
 
+      - name: Initialize database schema
+        run: |
+          docker compose exec -T postgres psql -U postgres -d swiftpay -v ON_ERROR_STOP=1 \
+            < ledger-service/src/main/resources/schema.sql
+          docker compose exec -T postgres psql -U postgres -d swiftpay -v ON_ERROR_STOP=1 \
+            < ledger-service/src/main/resources/data.sql
+
       - name: Wait for Redis
         run: |
           for i in $(seq 1 20); do
@@ -71,6 +78,10 @@ jobs:
           chmod +x mvnw
           ./mvnw -B clean install -DskipTests
           ./mvnw -B test -pl ledger-service,gateway-service -Dtest='*IntegrationTest' -Dspring.profiles.active=integration-test
+
+      - name: Tear down infrastructure
+        if: always()
+        run: docker compose down -v
 
   docker-build:
     runs-on: ubuntu-latest
