@@ -30,6 +30,10 @@ logging:
     org.springframework.kafka: WARN
 
 app:
+  kafka:
+    admin:
+      partitions: ${APP_KAFKA_TOPIC_PARTITIONS:12}
+      replicas: ${APP_KAFKA_TOPIC_REPLICAS:1}
   ledger:
     http:
       connect-timeout: 1s

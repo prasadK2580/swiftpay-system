@@ -1,6 +1,6 @@
--- Run before 1M load test (amount=1 per payment → need >= 1_000_000 on sender)
-SELECT user_id, balance, currency FROM accounts WHERE user_id IN (1001, 2002);
+-- Parameters (set via psql -v): sender_id, receiver_id, topup_balance
+SELECT user_id, balance, currency FROM accounts WHERE user_id IN (:sender_id, :receiver_id);
 
-UPDATE accounts SET balance = 20000000000000 WHERE user_id = 1001;
+UPDATE accounts SET balance = :topup_balance WHERE user_id = :sender_id;
 
-SELECT user_id, balance, currency FROM accounts WHERE user_id IN (1001, 2002);
+SELECT user_id, balance, currency FROM accounts WHERE user_id IN (:sender_id, :receiver_id);

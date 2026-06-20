@@ -1,7 +1,7 @@
 package com.swiftpay.ledger.controller;
 
 import com.swiftpay.ledger.controller.dto.LedgerBalanceResponse;
-import com.swiftpay.ledger.service.LedgerBalanceQueryService;
+import com.swiftpay.ledger.service.LedgerService;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Positive;
 import org.springframework.validation.annotation.Validated;
@@ -16,10 +16,10 @@ import org.springframework.web.bind.annotation.RestController;
 @RequestMapping("/v1/accounts")
 public class LedgerBalanceController {
 
-    private final LedgerBalanceQueryService ledgerBalanceQueryService;
+    private final LedgerService ledgerService;
 
-    public LedgerBalanceController(LedgerBalanceQueryService ledgerBalanceQueryService) {
-        this.ledgerBalanceQueryService = ledgerBalanceQueryService;
+    public LedgerBalanceController(LedgerService ledgerService) {
+        this.ledgerService = ledgerService;
     }
 
 
@@ -27,6 +27,6 @@ public class LedgerBalanceController {
     public LedgerBalanceResponse getBalance(
             @PathVariable @Positive Long userId,
             @RequestParam @NotBlank String currency) {
-        return ledgerBalanceQueryService.getBalance(userId, currency);
+        return ledgerService.getBalance(userId, currency);
     }
 }

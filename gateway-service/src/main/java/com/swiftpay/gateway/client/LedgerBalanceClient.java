@@ -1,0 +1,67 @@
+package com.swiftpay.gateway.client;
+
+import com.swiftpay.gateway.config.LedgerHttpProperties;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.stereotype.Component;
+import org.springframework.util.StringUtils;
+import org.springframework.web.client.HttpClientErrorException;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
+import org.springframework.web.util.UriComponentsBuilder;
+
+import java.util.Optional;
+
+/**
+ * Calls the ledger service for authoritative account balances.
+ */
+@Component
+@ConditionalOnProperty(name = "app.gateway.ledger-balance.source", havingValue = "http", matchIfMissing = true)
+public class LedgerBalanceClient {
+
+    private final RestClient ledgerRestClient;
+    private final LedgerHttpProperties properties;
+
+    public LedgerBalanceClient(RestClient ledgerRestClient, LedgerHttpProperties properties) {
+        this.ledgerRestClient = ledgerRestClient;
+        this.properties = properties;
+    }
+
+    public Optional<Double> getBalance(Long userId, String currency) {
+        String url = balanceUrl(userId, currency);
+        try {
+            LedgerBalanceHttpResponse body = ledgerRestClient.get()
+                    .uri(url)
+                    .retrieve()
+                    .body(LedgerBalanceHttpResponse.class);
+            if (body == null) {
+                return Optional.empty();
+            }
+            return Optional.of(body.balance());
+        } catch (HttpClientErrorException.NotFound ex) {
+            return Optional.empty();
+        } catch (RestClientException ex) {
+            return Optional.empty();
+        }
+    }
+
+    private String balanceUrl(Long userId, String currency) {
+        return UriComponentsBuilder.fromHttpUrl(resolveBaseUrl())
+                .path("/v1/accounts/{userId}/balance")
+                .queryParam("currency", currency)
+                .buildAndExpand(userId)
+                .toUriString();
+    }
+
+    private String resolveBaseUrl() {
+        if (!StringUtils.hasText(properties.getBaseUrl())) {
+            throw new IllegalStateException(
+                    "Ledger base URL is not configured. Set app.ledger.http.base-url or "
+                            + "APP_LEDGER_HTTP_BASE_URL (e.g. http://ledger:8081 in Docker/K8s).");
+        }
+        return trimTrailingSlash(properties.getBaseUrl());
+    }
+
+    private static String trimTrailingSlash(String baseUrl) {
+        return baseUrl.endsWith("/") ? baseUrl.substring(0, baseUrl.length() - 1) : baseUrl;
+    }
+}

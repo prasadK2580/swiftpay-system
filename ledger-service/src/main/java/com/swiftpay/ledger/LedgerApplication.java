@@ -2,6 +2,7 @@ package com.swiftpay.ledger;
 
 import com.swiftpay.ledger.config.KafkaConsumerRetryProperties;
 import com.swiftpay.ledger.config.RedisTtlProperties;
+import com.swiftpay.shared.config.KafkaTopicAdminProperties;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.autoconfigure.domain.EntityScan;
@@ -10,10 +11,11 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
 
 @SpringBootApplication(scanBasePackages = {"com.swiftpay.ledger", "com.swiftpay.shared"})
 @EntityScan(basePackages = "com.swiftpay.ledger.entity")
-@EnableJpaRepositories(basePackages = "com.swiftpay.ledger.repo")
+@EnableJpaRepositories(basePackages = "com.swiftpay.ledger.repository")
 @EnableConfigurationProperties({
         RedisTtlProperties.class,
-        KafkaConsumerRetryProperties.class
+        KafkaConsumerRetryProperties.class,
+        KafkaTopicAdminProperties.class
 })
 public class LedgerApplication {
 

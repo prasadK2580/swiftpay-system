@@ -3,8 +3,7 @@ package com.swiftpay.gateway.controller;
 import com.swiftpay.gateway.application.mapper.PaymentCommandMapper;
 import com.swiftpay.gateway.controller.dto.PaymentRequest;
 import com.swiftpay.gateway.controller.dto.PaymentResponse;
-import com.swiftpay.gateway.service.PaymentInitiationUseCase;
-import com.swiftpay.gateway.service.PaymentQueryUseCase;
+import com.swiftpay.gateway.service.PaymentService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -28,14 +27,10 @@ public class PaymentController {
 
     public static final String IDEMPOTENCY_KEY_HEADER = "Idempotency-Key";
 
-    private final PaymentInitiationUseCase paymentInitiationUseCase;
-    private final PaymentQueryUseCase paymentQueryUseCase;
+    private final PaymentService paymentService;
 
-    public PaymentController(
-            PaymentInitiationUseCase paymentInitiationUseCase,
-            PaymentQueryUseCase paymentQueryUseCase) {
-        this.paymentInitiationUseCase = paymentInitiationUseCase;
-        this.paymentQueryUseCase = paymentQueryUseCase;
+    public PaymentController(PaymentService paymentService) {
+        this.paymentService = paymentService;
     }
 
     @Operation(
@@ -51,7 +46,7 @@ public class PaymentController {
     public PaymentResponse create(
             @RequestHeader(IDEMPOTENCY_KEY_HEADER) String idempotencyKey,
             @Valid @RequestBody PaymentRequest request) {
-        return paymentInitiationUseCase.initiatePayment(
+        return paymentService.createPayment(
                 idempotencyKey, PaymentCommandMapper.fromRequest(request));
     }
 
@@ -63,8 +58,8 @@ public class PaymentController {
             @ApiResponse(responseCode = "404", description = "Transaction not found")
     })
     @GetMapping("/{transactionId}")
-    public PaymentResponse getByTransactionId(
+    public PaymentResponse getPaymentStatus(
             @Parameter(description = "Server-assigned transaction id") @PathVariable String transactionId) {
-        return paymentQueryUseCase.getByTransactionId(transactionId);
+        return paymentService.getPaymentStatus(transactionId);
     }
 }

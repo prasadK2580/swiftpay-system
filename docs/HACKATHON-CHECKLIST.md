@@ -5,13 +5,13 @@
 | Requirement | Implementation | Evidence |
 |-------------|----------------|----------|
 | POST /v1/payments | `PaymentController` | Swagger, integration tests |
-| Idempotency 24h (Redis) | `RedisIdempotencyGuard`, `RedisTransactionDeduplicationGuard` | README, Redis keys |
-| Balance validation | HTTP `GET /v1/accounts/{id}/balance` → Redis → `SufficientBalanceValidator` | `InsufficientFundsIntegrationTest`, `LedgerBalanceApiIntegrationTest` |
-| Save PENDING + PaymentInitiated | `PaymentPersistenceService` + `KafkaPaymentEventPublisher` | Logs `[KAFKA_SIGNAL_SENT]` |
-| Consume PaymentInitiated | `PaymentInitiatedListener` | Integration tests + Kafka logs |
-| Atomic debit/credit | `LedgerSettlementService` + ordered locks | CODEBASE-GUIDE |
-| PaymentCompleted / Failed | `KafkaSettlementEventPublisher` | `PaymentStatusIntegrationTest` → GET until COMPLETED |
-| GET payment status | `GET /v1/payments/{transactionId}` | `PaymentQueryService`, poll after POST |
+| Idempotency 24h (Redis) | `PaymentIdempotencyCache`, `DuplicatePaymentChecker` | README, Redis keys |
+| Balance validation | HTTP `GET /v1/accounts/{id}/balance` → Redis → `PaymentRequestValidator` | `InsufficientFundsIntegrationTest`, `LedgerBalanceApiIntegrationTest` |
+| Save PENDING + PaymentInitiated | `PendingPaymentService` + `PaymentEventProducer` | Kafka topic `payment.initiated` |
+| Consume PaymentInitiated | `PaymentInitiatedKafkaListener` | Integration tests + Kafka logs |
+| Atomic debit/credit | `PaymentSettlementProcessor` + ordered locks | CODEBASE-GUIDE |
+| PaymentCompleted / Failed | `SettlementEventProducer` | `PaymentStatusIntegrationTest` → GET until COMPLETED |
+| GET payment status | `GET /v1/payments/{transactionId}` | `PaymentService.getPaymentStatus`, poll after POST |
 | GET transaction history | `GET /v1/history/{userId}?limit=` | Paginated (max 200) |
 
 ## Mandatory non-functional
@@ -21,7 +21,7 @@
 | Swagger/OpenAPI | springdoc — :8080 and :8081 `/swagger-ui.html` |
 | HTTP status + error body | `GlobalExceptionHandler` |
 | Kafka consumer retry | `KafkaConsumerRetryConfig` |
-| /health | `HealthApiController` + actuator |
+| /health | Spring Actuator (`/health`, `/actuator/health`) |
 | Dockerfile | `gateway-service/Dockerfile`, `ledger-service/Dockerfile` |
 | docker-compose (full stack) | `docker-compose.yml` (gateway + ledger) |
 | Kubernetes | `k8s/` (separate deployments) |
