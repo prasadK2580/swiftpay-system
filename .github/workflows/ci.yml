@@ -23,7 +23,7 @@ jobs:
         run: |
           chmod +x mvnw
           ./mvnw -B clean install -DskipTests
-          ./mvnw -B test -pl ledger-service,gateway-service -Dtest='!*IntegrationTest'
+          ./mvnw -B test -pl ledger-service,gateway-service
 
   integration-test:
     runs-on: ubuntu-latest
@@ -68,7 +68,8 @@ jobs:
       - name: Integration tests
         run: |
           chmod +x mvnw
-          ./mvnw -B test -Pintegration-tests -Dtest='*IntegrationTest' -Dspring.profiles.active=integration-test
+          ./mvnw -B clean install -DskipTests
+          ./mvnw -B test -pl ledger-service,gateway-service -Dtest='*IntegrationTest' -Dspring.profiles.active=integration-test
 
   docker-build:
     runs-on: ubuntu-latest
