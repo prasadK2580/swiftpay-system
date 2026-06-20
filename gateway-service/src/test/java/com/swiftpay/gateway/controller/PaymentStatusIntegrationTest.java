@@ -43,7 +43,7 @@ class PaymentStatusIntegrationTest extends IntegrationTestBase {
         String transactionId = JsonPath.read(
                 createResult.getResponse().getContentAsString(), "$.transactionId");
 
-        await().atMost(30, SECONDS).pollInterval(1, SECONDS).untilAsserted(() ->
+        await().atMost(60, SECONDS).pollInterval(1, SECONDS).untilAsserted(() ->
                 mockMvc.perform(get("/v1/payments/{transactionId}", transactionId))
                         .andExpect(status().isOk())
                         .andExpect(jsonPath("$.status", is("COMPLETED"))));

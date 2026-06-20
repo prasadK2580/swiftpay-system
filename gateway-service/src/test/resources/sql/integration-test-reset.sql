@@ -1,3 +1,7 @@
--- Reset demo accounts after load-test balance inflation (ON CONFLICT in data.sql does not overwrite).
-UPDATE accounts SET balance = 10000, currency = 'INR' WHERE user_id = 1001;
-UPDATE accounts SET balance = 5000, currency = 'INR' WHERE user_id = 2002;
+-- Ensure demo accounts exist and reset balances after load-test inflation.
+INSERT INTO accounts (user_id, balance, currency)
+VALUES (1001, 10000, 'INR'),
+       (2002, 5000, 'INR')
+ON CONFLICT (user_id) DO UPDATE
+    SET balance = EXCLUDED.balance,
+        currency = EXCLUDED.currency;
